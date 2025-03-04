@@ -438,15 +438,15 @@ public TypeBinding findSuperTypeOriginatingFrom(TypeBinding otherType) {
 	if (otherType == null) {
 		return null;
 	}
-	switch(kind()) {
-		case Binding.ARRAY_TYPE :
+	switch (kind()) {
+		case Binding.ARRAY_TYPE:
 			ArrayBinding arrayType = (ArrayBinding) this;
 			int otherDim = otherType.dimensions();
 			if (arrayType.dimensions != otherDim) {
-				switch(otherType.id) {
-					case TypeIds.T_JavaLangObject :
-					case TypeIds.T_JavaIoSerializable :
-					case TypeIds.T_JavaLangCloneable :
+				switch (otherType.id) {
+					case TypeIds.T_JavaLangObject:
+					case TypeIds.T_JavaIoSerializable:
+					case TypeIds.T_JavaLangCloneable:
 						return otherType;
 				}
 				if (otherDim < arrayType.dimensions && otherType.leafComponentType().id == TypeIds.T_JavaLangObject) {
@@ -457,37 +457,38 @@ public TypeBinding findSuperTypeOriginatingFrom(TypeBinding otherType) {
 			if (!(arrayType.leafComponentType instanceof ReferenceBinding)) {
 				return null;
 			}
-			TypeBinding leafSuperType = arrayType.leafComponentType.findSuperTypeOriginatingFrom(otherType.leafComponentType());
+			TypeBinding leafSuperType = arrayType.leafComponentType
+					.findSuperTypeOriginatingFrom(otherType.leafComponentType());
 			if (leafSuperType == null) {
 				return null;
 			}
 			return arrayType.environment().createArrayType(leafSuperType, arrayType.dimensions);
 
-		case Binding.TYPE_PARAMETER :
-		    if (isCapture()) {
-		    	CaptureBinding capture = (CaptureBinding) this;
-		    	TypeBinding captureBound = capture.firstBound;
-		    	if (captureBound instanceof ArrayBinding) {
-		    		TypeBinding match = captureBound.findSuperTypeOriginatingFrom(otherType);
-		    		if (match != null) {
+		case Binding.TYPE_PARAMETER:
+			if (isCapture()) {
+				CaptureBinding capture = (CaptureBinding) this;
+				TypeBinding captureBound = capture.firstBound;
+				if (captureBound instanceof ArrayBinding) {
+					TypeBinding match = captureBound.findSuperTypeOriginatingFrom(otherType);
+					if (match != null) {
 						return match;
 					}
-		    	}
-		    }
+				}
+			}
 			//$FALL-THROUGH$
-		case Binding.TYPE :
-		case Binding.PARAMETERIZED_TYPE :
-		case Binding.GENERIC_TYPE :
-		case Binding.RAW_TYPE :
-		case Binding.WILDCARD_TYPE :
+		case Binding.TYPE:
+		case Binding.PARAMETERIZED_TYPE:
+		case Binding.GENERIC_TYPE:
+		case Binding.RAW_TYPE:
+		case Binding.WILDCARD_TYPE:
 		case Binding.INTERSECTION_TYPE:
-		    // do not allow type variables/intersection types to match with erasures for free
+			// do not allow type variables/intersection types to match with erasures for free
 			otherType = otherType.original();
-		    if (equalsEquals(this, otherType) || equalsEquals(original(), otherType)) {
+			if (equalsEquals(this, otherType) || equalsEquals(original(), otherType)) {
 				return this;
 			}
-		    ReferenceBinding currentType = (ReferenceBinding)this;
-		    if (!otherType.isInterface()) {
+			ReferenceBinding currentType = (ReferenceBinding) this;
+			if (!otherType.isInterface()) {
 				while ((currentType = currentType.superclass()) != null) {
 					if (equalsEquals(currentType, otherType)) {
 						return currentType;
@@ -497,7 +498,7 @@ public TypeBinding findSuperTypeOriginatingFrom(TypeBinding otherType) {
 					}
 				}
 				return null;
-		    }
+			}
 			ReferenceBinding[] interfacesToVisit = null;
 			int nextPosition = 0;
 			do {
@@ -509,9 +510,11 @@ public TypeBinding findSuperTypeOriginatingFrom(TypeBinding otherType) {
 					} else {
 						int itsLength = itsInterfaces.length;
 						if (nextPosition + itsLength >= interfacesToVisit.length) {
-							System.arraycopy(interfacesToVisit, 0, interfacesToVisit = new ReferenceBinding[nextPosition + itsLength + 5], 0, nextPosition);
+							System.arraycopy(interfacesToVisit, 0,
+									interfacesToVisit = new ReferenceBinding[nextPosition + itsLength + 5], 0,
+									nextPosition);
 						}
-						nextInterface : for (int a = 0; a < itsLength; a++) {
+						nextInterface: for (int a = 0; a < itsLength; a++) {
 							ReferenceBinding next = itsInterfaces[a];
 							for (int b = 0; b < nextPosition; b++) {
 								if (equalsEquals(next, interfacesToVisit[b])) {
@@ -536,9 +539,11 @@ public TypeBinding findSuperTypeOriginatingFrom(TypeBinding otherType) {
 				if (itsInterfaces != null && itsInterfaces != Binding.NO_SUPERINTERFACES) {
 					int itsLength = itsInterfaces.length;
 					if (nextPosition + itsLength >= interfacesToVisit.length) {
-						System.arraycopy(interfacesToVisit, 0, interfacesToVisit = new ReferenceBinding[nextPosition + itsLength + 5], 0, nextPosition);
+						System.arraycopy(interfacesToVisit, 0,
+								interfacesToVisit = new ReferenceBinding[nextPosition + itsLength + 5], 0,
+								nextPosition);
 					}
-					nextInterface : for (int a = 0; a < itsLength; a++) {
+					nextInterface: for (int a = 0; a < itsLength; a++) {
 						ReferenceBinding next = itsInterfaces[a];
 						for (int b = 0; b < nextPosition; b++) {
 							if (equalsEquals(next, interfacesToVisit[b])) {
