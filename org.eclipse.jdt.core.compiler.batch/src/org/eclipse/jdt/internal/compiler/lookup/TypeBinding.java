@@ -1670,7 +1670,7 @@ public char[] nullAnnotatedReadableName(CompilerOptions options, boolean shortNa
 }
 
 /**
- * Returns the orignal generic type instantiated by the receiver type, or itself if not.
+ * Returns the original generic type instantiated by the receiver type, or itself if not.
  * This is similar to erasure process, except it doesn't erase type variable, wildcard, intersection types etc...
  */
 public TypeBinding original() {
