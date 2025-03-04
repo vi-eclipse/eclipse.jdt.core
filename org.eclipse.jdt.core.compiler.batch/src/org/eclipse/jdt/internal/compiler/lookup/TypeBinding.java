@@ -38,6 +38,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -490,71 +491,48 @@ public TypeBinding findSuperTypeOriginatingFrom(TypeBinding otherType) {
 			ReferenceBinding currentType = (ReferenceBinding) this;
 			if (!otherType.isInterface()) {
 				while ((currentType = currentType.superclass()) != null) {
-					if (equalsEquals(currentType, otherType)) {
-						return currentType;
-					}
-					if (equalsEquals(currentType.original(), otherType)) {
+					if (equalsEquals(currentType, otherType) || equalsEquals(currentType.original(), otherType)) {
 						return currentType;
 					}
 				}
 				return null;
 			}
-			ReferenceBinding[] interfacesToVisit = null;
-			int nextPosition = 0;
-			do {
-				ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
-				if (itsInterfaces != null && itsInterfaces != Binding.NO_SUPERINTERFACES) {
-					if (interfacesToVisit == null) {
-						interfacesToVisit = itsInterfaces;
-						nextPosition = interfacesToVisit.length;
-					} else {
-						int itsLength = itsInterfaces.length;
-						if (nextPosition + itsLength >= interfacesToVisit.length) {
-							System.arraycopy(interfacesToVisit, 0,
-									interfacesToVisit = new ReferenceBinding[nextPosition + itsLength + 5], 0,
-									nextPosition);
-						}
-						nextInterface: for (int a = 0; a < itsLength; a++) {
-							ReferenceBinding next = itsInterfaces[a];
-							for (int b = 0; b < nextPosition; b++) {
-								if (equalsEquals(next, interfacesToVisit[b])) {
-									continue nextInterface;
-								}
-							}
-							interfacesToVisit[nextPosition++] = next;
-						}
-					}
-				}
-			} while ((currentType = currentType.superclass()) != null);
 
-			for (int i = 0; i < nextPosition; i++) {
-				currentType = interfacesToVisit[i];
-				if (equalsEquals(currentType, otherType)) {
-					return currentType;
-				}
-				if (equalsEquals(currentType.original(), otherType)) {
-					return currentType;
-				}
-				ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
-				if (itsInterfaces != null && itsInterfaces != Binding.NO_SUPERINTERFACES) {
-					int itsLength = itsInterfaces.length;
-					if (nextPosition + itsLength >= interfacesToVisit.length) {
-						System.arraycopy(interfacesToVisit, 0,
-								interfacesToVisit = new ReferenceBinding[nextPosition + itsLength + 5], 0,
-								nextPosition);
-					}
-					nextInterface: for (int a = 0; a < itsLength; a++) {
-						ReferenceBinding next = itsInterfaces[a];
-						for (int b = 0; b < nextPosition; b++) {
-							if (equalsEquals(next, interfacesToVisit[b])) {
-								continue nextInterface;
-							}
+			List<ReferenceBinding> interfacesToVisit = new ArrayList<>();
+			while (currentType != null) {
+				ReferenceBinding[] currentSuperInterfaces = currentType.superInterfaces();
+				if (currentSuperInterfaces != null) {
+					for (ReferenceBinding superInterface : currentSuperInterfaces) {
+						boolean superInterfaceUnknown = interfacesToVisit.stream()
+								.noneMatch(tb -> equalsEquals(tb, superInterface));
+						if (superInterfaceUnknown) {
+							interfacesToVisit.add(superInterface);
 						}
-						interfacesToVisit[nextPosition++] = next;
+					}
+				}
+				currentType = currentType.superclass();
+			}
+
+			for (int i = 0; i < interfacesToVisit.size(); i++) {
+				currentType = interfacesToVisit.get(i);
+				if (equalsEquals(currentType, otherType) || equalsEquals(currentType.original(), otherType)) {
+					return currentType;
+				}
+
+				ReferenceBinding[] currentSuperInterfaces = currentType.superInterfaces();
+				if (currentSuperInterfaces != null) {
+					for (ReferenceBinding superInterface : currentSuperInterfaces) {
+						boolean superInterfaceUnknown = interfacesToVisit.stream()
+								.noneMatch(tb -> equalsEquals(tb, superInterface));
+						if (superInterfaceUnknown) {
+							interfacesToVisit.add(superInterface);
+						}
 					}
 				}
 			}
+
 			break;
+
 		case Binding.INTERSECTION_TYPE18:
 			IntersectionTypeBinding18 itb18 = (IntersectionTypeBinding18) this;
 			ReferenceBinding[] intersectingTypes = itb18.getIntersectingTypes();
