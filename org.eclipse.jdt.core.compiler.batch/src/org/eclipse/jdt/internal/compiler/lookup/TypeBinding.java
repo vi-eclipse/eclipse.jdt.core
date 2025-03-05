@@ -378,6 +378,7 @@ public ReferenceBinding findSuperTypeOriginatingFrom(int wellKnownOriginalID, bo
 		}
 		return null;
     }
+
 	ReferenceBinding[] interfacesToVisit = null;
 	int nextPosition = 0;
 	do {
@@ -436,40 +437,59 @@ public TypeBinding findSuperTypeOriginatingFrom(TypeBinding otherType) {
 	if (equalsEquals(this, otherType)) {
 		return this;
 	}
+
 	if (otherType == null) {
 		return null;
 	}
+
 	switch (kind()) {
 		case Binding.ARRAY_TYPE:
 			ArrayBinding arrayType = (ArrayBinding) this;
-			int otherDim = otherType.dimensions();
-			if (arrayType.dimensions != otherDim) {
-				switch (otherType.id) {
-					case TypeIds.T_JavaLangObject:
-					case TypeIds.T_JavaIoSerializable:
-					case TypeIds.T_JavaLangCloneable:
-						return otherType;
-				}
-				if (otherDim < arrayType.dimensions && otherType.leafComponentType().id == TypeIds.T_JavaLangObject) {
-					return otherType; // X[][] has Object[] as an implicit supertype
-				}
-				return null;
-			}
+		    int arrayDimensions = arrayType.dimensions();
+		    int otherDimensions = otherType.dimensions();
+
+		    // If the dimensions differ, check for implicit supertypes.
+		    if (arrayDimensions != otherDimensions) {
+		        // If the other type is one of the implicit supertypes, return it.
+		        if (otherType.id == TypeIds.T_JavaLangObject ||
+		            otherType.id == TypeIds.T_JavaIoSerializable ||
+		            otherType.id == TypeIds.T_JavaLangCloneable) {
+		            return otherType;
+		        }
+
+		        // If the other type has fewer dimensions and its leaf component is Object,
+		        // then it qualifies as an implicit supertype (e.g., X[][] has Object[] as an implicit supertype).
+		        if (otherDimensions < arrayDimensions &&
+		            otherType.leafComponentType().id == TypeIds.T_JavaLangObject) {
+		            return otherType;
+		        }
+
+		        return null;
+		    }
+
+		    // Ensure that the leaf component type is a reference type.
 			if (!(arrayType.leafComponentType instanceof ReferenceBinding)) {
 				return null;
 			}
-			TypeBinding leafSuperType = arrayType.leafComponentType
+
+		    // Find a common supertype for the leaf component types.
+			TypeBinding commonLeafSuperType = arrayType.leafComponentType
 					.findSuperTypeOriginatingFrom(otherType.leafComponentType());
-			if (leafSuperType == null) {
+			if (commonLeafSuperType == null) {
 				return null;
 			}
-			return arrayType.environment().createArrayType(leafSuperType, arrayType.dimensions);
+
+			// Construct a new array type that preserves the original dimensions using the common leaf supertype.
+			TypeBinding commonArrayType = arrayType.environment().createArrayType(commonLeafSuperType, arrayDimensions);
+			return commonArrayType;
 
 		case Binding.TYPE_PARAMETER:
+			// Check if this type is a captured type (from capture conversion of wildcards).
 			if (isCapture()) {
 				CaptureBinding capture = (CaptureBinding) this;
 				TypeBinding captureBound = capture.firstBound;
 				if (captureBound instanceof ArrayBinding) {
+					// Find a supertype from the array's type hierarchy that originates from otherType.
 					TypeBinding match = captureBound.findSuperTypeOriginatingFrom(otherType);
 					if (match != null) {
 						return match;
@@ -485,10 +505,16 @@ public TypeBinding findSuperTypeOriginatingFrom(TypeBinding otherType) {
 		case Binding.INTERSECTION_TYPE:
 			// do not allow type variables/intersection types to match with erasures for free
 			otherType = otherType.original();
+
 			if (equalsEquals(this, otherType) || equalsEquals(original(), otherType)) {
 				return this;
 			}
+
 			ReferenceBinding currentType = (ReferenceBinding) this;
+
+			// For non-interface otherType, traverse up the superclass chain of currentType and return the first
+			// superclass that matches otherType (either directly or via its original form). Return null if none is
+			// found.
 			if (!otherType.isInterface()) {
 				while ((currentType = currentType.superclass()) != null) {
 					if (equalsEquals(currentType, otherType) || equalsEquals(currentType.original(), otherType)) {
@@ -499,6 +525,9 @@ public TypeBinding findSuperTypeOriginatingFrom(TypeBinding otherType) {
 			}
 
 			List<ReferenceBinding> interfacesToVisit = new ArrayList<>();
+
+			// Traverse up the superclass chain of currentType and collect each superclass's *direct* superinterfaces,
+			// adding each unique interface to the interfacesToVisit list.
 			while (currentType != null) {
 				ReferenceBinding[] currentSuperInterfaces = currentType.superInterfaces();
 				if (currentSuperInterfaces != null) {
@@ -513,6 +542,9 @@ public TypeBinding findSuperTypeOriginatingFrom(TypeBinding otherType) {
 				currentType = currentType.superclass();
 			}
 
+			// Iterate over the list of superinterfaces (using breadth-first search) to find and return the first
+			// interface that matches 'otherType' (or its original form), while expanding the list with each interface's
+			// own superinterfaces.
 			for (int i = 0; i < interfacesToVisit.size(); i++) {
 				currentType = interfacesToVisit.get(i);
 				if (equalsEquals(currentType, otherType) || equalsEquals(currentType.original(), otherType)) {
