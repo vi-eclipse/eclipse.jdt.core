@@ -364,7 +364,7 @@ public ReferenceBinding findSuperTypeOriginatingFrom(int wellKnownOriginalID, bo
 	ReferenceBinding reference = (ReferenceBinding) this;
 
     // do not allow type variables to match with erasures for free
-    if (reference.id == wellKnownOriginalID || (original().id == wellKnownOriginalID)) {
+    if (reference.id == wellKnownOriginalID || original().id == wellKnownOriginalID) {
 		return reference;
 	}
 
@@ -372,62 +372,55 @@ public ReferenceBinding findSuperTypeOriginatingFrom(int wellKnownOriginalID, bo
     // iterate superclass to avoid recording interfaces if searched supertype is class
     if (originalIsClass) {
 		while ((currentType = currentType.superclass()) != null) {
-			if ((currentType.id == wellKnownOriginalID) || (currentType.original().id == wellKnownOriginalID)) {
+			if (currentType.id == wellKnownOriginalID || currentType.original().id == wellKnownOriginalID) {
 				return currentType;
 			}
 		}
 		return null;
     }
 
-	ReferenceBinding[] interfacesToVisit = null;
-	int nextPosition = 0;
-	do {
-		ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
-		if (itsInterfaces != null && itsInterfaces != Binding.NO_SUPERINTERFACES) {
-			if (interfacesToVisit == null) {
-				interfacesToVisit = itsInterfaces;
-				nextPosition = interfacesToVisit.length;
-			} else {
-				int itsLength = itsInterfaces.length;
-				if (nextPosition + itsLength >= interfacesToVisit.length) {
-					System.arraycopy(interfacesToVisit, 0, interfacesToVisit = new ReferenceBinding[nextPosition + itsLength + 5], 0, nextPosition);
-				}
-				nextInterface : for (int a = 0; a < itsLength; a++) {
-					ReferenceBinding next = itsInterfaces[a];
-					for (int b = 0; b < nextPosition; b++) {
-						if (TypeBinding.equalsEquals(next, interfacesToVisit[b])) {
-							continue nextInterface;
-						}
-					}
-					interfacesToVisit[nextPosition++] = next;
-				}
-			}
-		}
-	} while ((currentType = currentType.superclass()) != null);
+	List<ReferenceBinding> interfacesToVisit = collectUniqueDirectSuperInterfaces(currentType);
 
-	for (int i = 0; i < nextPosition; i++) {
-		currentType = interfacesToVisit[i];
-		if ((currentType.id == wellKnownOriginalID) || (currentType.original().id == wellKnownOriginalID)) {
+	for (int i = 0; i < interfacesToVisit.size(); i++) {
+		currentType = interfacesToVisit.get(i);
+		if (currentType.id == wellKnownOriginalID || currentType.original().id == wellKnownOriginalID) {
 			return currentType;
 		}
-		ReferenceBinding[] itsInterfaces = currentType.superInterfaces();
-		if (itsInterfaces != null && itsInterfaces != Binding.NO_SUPERINTERFACES) {
-			int itsLength = itsInterfaces.length;
-			if (nextPosition + itsLength >= interfacesToVisit.length) {
-				System.arraycopy(interfacesToVisit, 0, interfacesToVisit = new ReferenceBinding[nextPosition + itsLength + 5], 0, nextPosition);
-			}
-			nextInterface : for (int a = 0; a < itsLength; a++) {
-				ReferenceBinding next = itsInterfaces[a];
-				for (int b = 0; b < nextPosition; b++) {
-					if (TypeBinding.equalsEquals(next, interfacesToVisit[b])) {
-						continue nextInterface;
-					}
+
+		ReferenceBinding[] currentSuperInterfaces = currentType.superInterfaces();
+		if (currentSuperInterfaces != null) {
+			for (ReferenceBinding superInterface : currentSuperInterfaces) {
+				boolean superInterfaceUnknown = interfacesToVisit.stream()
+						.noneMatch(tb -> equalsEquals(tb, superInterface));
+				if (superInterfaceUnknown) {
+					interfacesToVisit.add(superInterface);
 				}
-				interfacesToVisit[nextPosition++] = next;
 			}
 		}
 	}
 	return null;
+}
+
+private List<ReferenceBinding> collectUniqueDirectSuperInterfaces(ReferenceBinding currentType) {
+	List<ReferenceBinding> uniqueDirectSuperInterfaces = new ArrayList<>();
+
+	// Traverse up the superclass chain of currentType and collect each superclass's *direct* superinterfaces,
+	// adding each unique interface to the interfacesToVisit list.
+	while (currentType != null) {
+		ReferenceBinding[] currentSuperInterfaces = currentType.superInterfaces();
+		if (currentSuperInterfaces != null) {
+			for (ReferenceBinding superInterface : currentSuperInterfaces) {
+				boolean superInterfaceUnknown = uniqueDirectSuperInterfaces.stream()
+						.noneMatch(tb -> equalsEquals(tb, superInterface));
+				if (superInterfaceUnknown) {
+					uniqueDirectSuperInterfaces.add(superInterface);
+				}
+			}
+		}
+		currentType = currentType.superclass();
+	}
+
+	return uniqueDirectSuperInterfaces;
 }
 
 /**
@@ -448,7 +441,6 @@ public TypeBinding findSuperTypeOriginatingFrom(TypeBinding otherType) {
 		    int arrayDimensions = arrayType.dimensions();
 		    int otherDimensions = otherType.dimensions();
 
-		    // If the dimensions differ, check for implicit supertypes.
 		    if (arrayDimensions != otherDimensions) {
 		        // If the other type is one of the implicit supertypes, return it.
 		        if (otherType.id == TypeIds.T_JavaLangObject ||
@@ -524,23 +516,8 @@ public TypeBinding findSuperTypeOriginatingFrom(TypeBinding otherType) {
 				return null;
 			}
 
-			List<ReferenceBinding> interfacesToVisit = new ArrayList<>();
 
-			// Traverse up the superclass chain of currentType and collect each superclass's *direct* superinterfaces,
-			// adding each unique interface to the interfacesToVisit list.
-			while (currentType != null) {
-				ReferenceBinding[] currentSuperInterfaces = currentType.superInterfaces();
-				if (currentSuperInterfaces != null) {
-					for (ReferenceBinding superInterface : currentSuperInterfaces) {
-						boolean superInterfaceUnknown = interfacesToVisit.stream()
-								.noneMatch(tb -> equalsEquals(tb, superInterface));
-						if (superInterfaceUnknown) {
-							interfacesToVisit.add(superInterface);
-						}
-					}
-				}
-				currentType = currentType.superclass();
-			}
+			List<ReferenceBinding> interfacesToVisit = collectUniqueDirectSuperInterfaces(currentType);
 
 			// Iterate over the list of superinterfaces (using breadth-first search) to find and return the first
 			// interface that matches 'otherType' (or its original form), while expanding the list with each interface's
