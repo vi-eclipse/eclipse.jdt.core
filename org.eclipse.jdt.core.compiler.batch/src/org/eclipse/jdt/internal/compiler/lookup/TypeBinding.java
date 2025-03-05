@@ -361,16 +361,15 @@ public ReferenceBinding findSuperTypeOriginatingFrom(int wellKnownOriginalID, bo
 	if (!(this instanceof ReferenceBinding)) {
 		return null;
 	}
-	ReferenceBinding reference = (ReferenceBinding) this;
+	ReferenceBinding currentType = (ReferenceBinding) this;
 
     // do not allow type variables to match with erasures for free
-    if (reference.id == wellKnownOriginalID || original().id == wellKnownOriginalID) {
-		return reference;
+    if (currentType.id == wellKnownOriginalID || original().id == wellKnownOriginalID) {
+		return currentType;
 	}
 
-    ReferenceBinding currentType = reference;
-    // iterate superclass to avoid recording interfaces if searched supertype is class
     if (originalIsClass) {
+        // iterating over superclass *chain*
 		while ((currentType = currentType.superclass()) != null) {
 			if (currentType.id == wellKnownOriginalID || currentType.original().id == wellKnownOriginalID) {
 				return currentType;
@@ -379,6 +378,7 @@ public ReferenceBinding findSuperTypeOriginatingFrom(int wellKnownOriginalID, bo
 		return null;
     }
 
+    // iterate over superinterface *tree*
 	List<ReferenceBinding> interfacesToVisit = collectUniqueDirectSuperInterfaces(currentType);
 
 	for (int i = 0; i < interfacesToVisit.size(); i++) {
