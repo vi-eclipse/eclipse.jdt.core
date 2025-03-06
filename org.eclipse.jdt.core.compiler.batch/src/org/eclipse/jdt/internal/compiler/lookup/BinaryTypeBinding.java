@@ -2523,47 +2523,64 @@ private void detectCircularHierarchy() {
 	}
 }
 
-// NOTE: superInterfaces of binary types are resolved when needed
+//NOTE: superInterfaces of binary types are resolved when needed
 @Override
 protected ReferenceBinding[] superInterfacesRecursive(Set<ReferenceBinding> visited) {
+
 	if (!visited.add(this)) { // do not evaluate the same type twice
 		return this.superInterfaces;
 	}
-	if (!isPrototype()) {
-		return this.superInterfaces = this.prototype.superInterfacesRecursive(visited); // TODO (visjee) protect from duplicated calls
-	}
-	if ((this.tagBits & TagBits.HasUnresolvedSuperinterfaces) == 0)
-		return this.superInterfaces;
 
-	for (int i = this.superInterfaces.length; --i >= 0;) {
-		this.superInterfaces[i] = (ReferenceBinding) resolveType(this.superInterfaces[i], this.environment, true /* raw conversion */);
+	if (!isPrototype()) {
+		// TODO (visjee) protect from duplicated calls
+		if (!visited.add(this.prototype)) {
+			this.superInterfaces = this.prototype.superInterfacesRecursive(visited);
+		}
+		return this.superInterfaces;
+	}
+
+	if ((this.tagBits & TagBits.HasUnresolvedSuperinterfaces) == 0) {
+		return this.superInterfaces;
+	}
+
+	for (int i = this.superInterfaces.length - 1; i >= 0; i--) {
+		this.superInterfaces[i] = (ReferenceBinding) resolveType(this.superInterfaces[i], this.environment,
+				true /* raw conversion */);
+
 		if (this.superInterfaces[i].problemId() == ProblemReasons.NotFound) {
 			this.tagBits |= TagBits.HierarchyHasProblems; // propagate type inconsistency
 		} else {
 			// make super-type resolving recursive for propagating typeBits downwards
-			boolean wasToleratingMissingTypeProcessingAnnotations = this.environment.mayTolerateMissingType;
+			boolean oldMayTolerateMissingType = this.environment.mayTolerateMissingType;
 			this.environment.mayTolerateMissingType = true; // https://bugs.eclipse.org/bugs/show_bug.cgi?id=360164
-			try {
-				this.superInterfaces[i].superclass(); // TODO (visjee) do I need to prevent duplicated calls here too? Probably NOT.
-				if (this.superInterfaces[i].isParameterizedType()) {
-					ReferenceBinding superType = this.superInterfaces[i].actualType();
-					if (TypeBinding.equalsEquals(superType, this)) {
-						this.tagBits |= TagBits.HierarchyHasProblems;
-						continue;
-					}
+
+			// TODO (visjee) do I need to prevent duplicated calls here too? Probably NOT.
+			this.superInterfaces[i].superclass();
+			if (this.superInterfaces[i].isParameterizedType()) {
+				ReferenceBinding superType = this.superInterfaces[i].actualType();
+				if (TypeBinding.equalsEquals(superType, this)) {
+					this.tagBits |= TagBits.HierarchyHasProblems;
+					// Manually restore before continuing the loop.
+					this.environment.mayTolerateMissingType = oldMayTolerateMissingType;
+					continue;
 				}
-				this.superInterfaces[i].superInterfacesRecursive(visited); // TODO (visjee) protect from duplicated calls
-			} finally {
-				this.environment.mayTolerateMissingType = wasToleratingMissingTypeProcessingAnnotations;
 			}
+			// TODO Does this even has side effects?
+			this.superInterfaces[i].superInterfacesRecursive(visited); // TODO (visjee) protect from duplicated calls
+
+			this.environment.mayTolerateMissingType = oldMayTolerateMissingType;
+
 		}
+
 		this.typeBits |= (this.superInterfaces[i].typeBits & TypeIds.InheritableBits);
-		if ((this.typeBits & (TypeIds.BitAutoCloseable|TypeIds.BitCloseable)) != 0) // avoid the side-effects of hasTypeBit()!
+		if ((this.typeBits & (TypeIds.BitAutoCloseable | TypeIds.BitCloseable)) != 0) { // avoid the side-effects of hasTypeBit()!
 			this.typeBits |= applyCloseableWhitelists(this.environment.globalOptions);
+		}
 	}
 	this.tagBits &= ~TagBits.HasUnresolvedSuperinterfaces;
 	return this.superInterfaces;
 }
+
 @Override
 public ReferenceBinding[] permittedTypes() {
 
