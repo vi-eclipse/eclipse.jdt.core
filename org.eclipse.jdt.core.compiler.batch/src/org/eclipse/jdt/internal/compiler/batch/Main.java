@@ -261,7 +261,7 @@ public class Main implements ProblemSeverities, SuffixConstants {
 			}
 		}
 		private String errorReportSource(CategorizedProblem problem, char[] unitSource, int bits) {
-			//extra from the source the innacurate     token
+			//extra from the source the inaccurate     token
 			//and "highlight" it using some underneath ^^^^^
 			//put some context around too.
 
