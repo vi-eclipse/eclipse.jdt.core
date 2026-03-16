@@ -112,6 +112,20 @@ public class JavaProject
 	extends Openable
 	implements IJavaProject, SuffixConstants {
 
+	private static final class ExpandedClasspathContext {
+		private final Map<JavaProject, IClasspathEntry[]> resolvedClasspathByProject = new HashMap<>();
+		private final Map<String, Integer> accumulatedEntryIndexes = new HashMap<>();
+
+		IClasspathEntry[] getResolvedClasspath(JavaProject project) throws JavaModelException {
+			IClasspathEntry[] resolvedClasspath = this.resolvedClasspathByProject.get(project);
+			if (resolvedClasspath == null) {
+				resolvedClasspath = project.getResolvedClasspath();
+				this.resolvedClasspathByProject.put(project, resolvedClasspath);
+			}
+			return resolvedClasspath;
+		}
+	}
+
 	/**
 	 * Marker value used in cases where a release is passed or used as an argument but no specific release is selected.
 	 */
@@ -553,9 +567,18 @@ public class JavaProject
 	private void computeExpandedClasspath(
 		ClasspathEntry referringEntry,
 		HashMap<String, Boolean> rootIDs,
+		computeExpandedClasspath(referringEntry, rootIDs, accumulatedEntries, excludeTestCode, new ExpandedClasspathContext());
+	}
 		ArrayList<ClasspathEntry> accumulatedEntries, boolean excludeTestCode) throws JavaModelException {
 
-		IClasspathEntry[] resolvedClasspath = getResolvedClasspath();
+	private void computeExpandedClasspath(
+		ClasspathEntry referringEntry,
+		HashMap<String, Boolean> rootIDs,
+		ArrayList<ClasspathEntry> accumulatedEntries,
+		boolean excludeTestCode,
+		ExpandedClasspathContext context) throws JavaModelException {
+
+		IClasspathEntry[] resolvedClasspath = context.getResolvedClasspath(this);
 
 		IWorkspaceRoot workspaceRoot = ResourcesPlugin.getWorkspace().getRoot();
 		boolean isInitialProject = referringEntry == null;
@@ -581,15 +604,13 @@ public class JavaProject
 						} else {
 							// find the existing entry and update it.
 							rootIDs.put(rootID, Boolean.FALSE);
-							for (int j = 0; j < accumulatedEntries.size(); j++) {
+							Integer index = context.accumulatedEntryIndexes.get(rootID);
+							if (index != null) {
 								// it is unclear how oldEntry and combinedEntry could be merged.
 								// main code compilation should remain untouched as far as possible,
 								// so take all settings from oldEntry and just remove WITHOUT_TEST_CODE
-								ClasspathEntry oldEntry = accumulatedEntries.get(j);
-								if (oldEntry.rootID().equals(rootID)) {
-									accumulatedEntries.set(j, oldEntry.withExtraAttributeRemoved(IClasspathAttribute.WITHOUT_TEST_CODE));
-									break;
-								}
+								ClasspathEntry oldEntry = accumulatedEntries.get(index.intValue());
+								accumulatedEntries.set(index.intValue(), oldEntry.withExtraAttributeRemoved(IClasspathAttribute.WITHOUT_TEST_CODE));
 							}
 							// combine restrictions along the project chain
 							combinedEntry = entry.combineWith(referringEntry);
@@ -597,6 +618,7 @@ public class JavaProject
 					} else {
 						rootIDs.put(rootID, nestedWithoutTestCode);
 						// combine restrictions along the project chain
+						context.accumulatedEntryIndexes.put(rootID, Integer.valueOf(accumulatedEntries.size()));
 						combinedEntry = entry.combineWith(referringEntry);
 						accumulatedEntries.add(combinedEntry);
 					}
@@ -608,13 +630,14 @@ public class JavaProject
 								javaProject.computeExpandedClasspath(
 									combinedEntry,
 									rootIDs,
-									accumulatedEntries, nestedWithoutTestCode);
+									accumulatedEntries, nestedWithoutTestCode, context);
 						}
 					}
 				} else {
 					if (!rootIDs.containsKey(rootID)) {
 						// combine restrictions along the project chain
 						ClasspathEntry combinedEntry = entry.combineWith(referringEntry);
+						context.accumulatedEntryIndexes.put(rootID, Integer.valueOf(accumulatedEntries.size()));
 						accumulatedEntries.add(combinedEntry);
 						rootIDs.put(rootID, excludeTestCode); // value actually doesn't matter for non-projects
 					}
