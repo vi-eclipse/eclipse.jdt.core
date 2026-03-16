@@ -74,6 +74,10 @@ Map<String, SourceFile> additionalUnits;
 private final CompilationGroup compilationGroup;
 /** Tasks resulting from add-reads or add-exports classpath attributes. */
 ModuleUpdater moduleUpdater;
+private final Map<ModulePackageLookupKey, char[][]> modulesDeclaringPackageCache = new HashMap<>();
+
+private static record ModulePackageLookupKey(String packageName, String moduleName) {
+}
 
 NameEnvironment(IWorkspaceRoot root, JavaProject javaProject, Map<IProject, ClasspathLocation[]> binaryLocationsPerProject, BuildNotifier notifier, CompilationGroup compilationGroup, int release) throws CoreException {
 	this.compilationGroup = compilationGroup;
@@ -662,27 +666,22 @@ public NameEnvironmentAnswer findType(char[] typeName, char[][] packageName, cha
 public char[][] getModulesDeclaringPackage(char[][] packageName, char[] moduleName) {
 	String pkgName = new String(CharOperation.concatWith(packageName, '/'));
 	String modName = new String(moduleName);
+	ModulePackageLookupKey cacheKey = new ModulePackageLookupKey(pkgName, modName);
+	char[][] cached = this.modulesDeclaringPackageCache.get(cacheKey);
+	if (cached != null || this.modulesDeclaringPackageCache.containsKey(cacheKey)) {
+		return cached;
+	}
 	LookupStrategy strategy = LookupStrategy.get(moduleName);
+	char[][] result = null;
 	switch (strategy) {
 		// include unnamed (search all locations):
 		case Any:
 		case Unnamed:
-			char[][] names = CharOperation.NO_CHAR_CHAR;
-			for (ClasspathLocation location : this.binaryLocations) {
-				if (strategy.matches(location, ClasspathLocation::hasModule)) {
-					char[][] declaringModules = location.getModulesDeclaringPackage(pkgName, null);
-					if (declaringModules != null)
-						names = CharOperation.arrayConcat(names, declaringModules);
-				}
+			result = collectModulesDeclaringPackage(this.binaryLocations, strategy, pkgName);
+			if (this.sourceLocations.length > 0) {
+				result = appendModules(result, collectModulesDeclaringPackage(this.sourceLocations, strategy, pkgName));
 			}
-			for (ClasspathLocation location : this.sourceLocations) {
-				if (strategy.matches(location, ClasspathLocation::hasModule)) {
-					char[][] declaringModules = location.getModulesDeclaringPackage(pkgName, null);
-					if (declaringModules != null)
-						names = CharOperation.arrayConcat(names, declaringModules);
-				}
-			}
-			return names == CharOperation.NO_CHAR_CHAR ? null : names;
+			break;
 
 		// only named (rely on modulePathEntries):
 		case AnyNamed:
@@ -690,18 +689,54 @@ public char[][] getModulesDeclaringPackage(char[][] packageName, char[] moduleNa
 			//$FALL-THROUGH$
 		default:
 			if (this.modulePathEntries != null) {
-				names = CharOperation.NO_CHAR_CHAR;
+				List<char[]> names = null;
 				Collection<IModulePathEntry> entries = new HashSet<>(this.modulePathEntries.values());
 				for (IModulePathEntry modulePathEntry : entries) {
 					char[][] declaringModules = modulePathEntry.getModulesDeclaringPackage(pkgName, modName);
-					if (declaringModules != null)
-						names = CharOperation.arrayConcat(names, declaringModules);
+					if (declaringModules != null) {
+						if (names == null) {
+							names = new ArrayList<>(declaringModules.length);
+						}
+						names.addAll(Arrays.asList(declaringModules));
+					}
 				}
-				return names == CharOperation.NO_CHAR_CHAR ? null : names;
+				if (names != null) {
+					result = names.toArray(new char[names.size()][]);
+				}
 			}
 	}
-	return null;
+	this.modulesDeclaringPackageCache.put(cacheKey, result);
+	return result;
 }
+
+	private static char[][] collectModulesDeclaringPackage(ClasspathLocation[] locations, LookupStrategy strategy, String packageName) {
+		List<char[]> names = null;
+		for (ClasspathLocation location : locations) {
+			if (strategy.matches(location, ClasspathLocation::hasModule)) {
+				char[][] declaringModules = location.getModulesDeclaringPackage(packageName, null);
+				if (declaringModules != null) {
+					if (names == null) {
+						names = new ArrayList<>(declaringModules.length);
+					}
+					names.addAll(Arrays.asList(declaringModules));
+				}
+			}
+		}
+		return names == null ? null : names.toArray(new char[names.size()][]);
+	}
+
+	private static char[][] appendModules(char[][] existing, char[][] additional) {
+		if (existing == null) {
+			return additional;
+		}
+		if (additional == null) {
+			return existing;
+		}
+		char[][] combined = new char[existing.length + additional.length][];
+		System.arraycopy(existing, 0, combined, 0, existing.length);
+		System.arraycopy(additional, 0, combined, existing.length, additional.length);
+		return combined;
+	}
 
 @Override
 public boolean hasCompilationUnit(char[][] qualifiedPackageName, char[] moduleName, boolean checkCUs) {

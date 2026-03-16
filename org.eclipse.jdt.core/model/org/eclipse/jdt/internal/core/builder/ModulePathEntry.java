@@ -16,8 +16,10 @@ package org.eclipse.jdt.internal.core.builder;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.ArrayList;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.env.IModule;
@@ -98,13 +100,17 @@ public class ModulePathEntry implements IModulePathEntry {
 		if (moduleName != null && ((this.module == null) || !moduleName.equals(String.valueOf(this.module.name()))))
 			return null;
 		// search all locations
-		char[][] names = CharOperation.NO_CHAR_CHAR;
+		List<char[]> names = null;
 		for (ClasspathLocation cp : this.locations) {
 			char[][] declaringModules = cp.getModulesDeclaringPackage(qualifiedPackageName, moduleName);
-			if (declaringModules != null)
-				names = CharOperation.arrayConcat(names, declaringModules);
+			if (declaringModules != null) {
+				if (names == null) {
+					names = new ArrayList<>(declaringModules.length);
+				}
+				names.addAll(Arrays.asList(declaringModules));
+			}
 		}
-		return names == CharOperation.NO_CHAR_CHAR ? null : names;
+		return names == null ? null : names.toArray(new char[names.size()][]);
 	}
 	@Override
 	public boolean hasCompilationUnit(String qualifiedPackageName, String moduleName) {
