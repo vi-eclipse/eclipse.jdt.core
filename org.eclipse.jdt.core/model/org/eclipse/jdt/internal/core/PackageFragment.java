@@ -55,6 +55,7 @@ public class PackageFragment extends Openable implements IPackageFragment, Suffi
 	public final String[] names;
 
 	private final boolean isValidPackageName;
+	private volatile String cachedElementName;
 
 protected PackageFragment(PackageFragmentRoot root, String[] names) {
 	super(root);
@@ -322,7 +323,12 @@ public ICompilationUnit[] getCompilationUnits(WorkingCopyOwner owner) {
 public String getElementName() {
 	if (this.names.length == 0)
 		return DEFAULT_PACKAGE_NAME;
-	return Util.concatWith(this.names, '.');
+	String elementName = this.cachedElementName;
+	if (elementName == null) {
+		elementName = Util.concatWith(this.names, '.');
+		this.cachedElementName = elementName;
+	}
+	return elementName;
 }
 /**
  * @see IJavaElement
