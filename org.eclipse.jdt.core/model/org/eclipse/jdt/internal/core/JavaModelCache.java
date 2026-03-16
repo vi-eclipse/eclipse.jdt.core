@@ -93,7 +93,7 @@ public JavaModelCache() {
 
 	// NB: Don't use a LRUCache for projects as they are
 	// constantly reopened (e.g. during delta processing)
-	this.projectCache = new HashMap<>();  // HashMap size adjusts automatically
+	this.projectCache = new HashMap<>(hashMapCapacity(Math.max(16, rootCacheSize / 64)));
 	if (VERBOSE) {
 		this.rootCache = new VerboseElementCache<>(rootCacheSize, "Root cache"); //$NON-NLS-1$
 		this.pkgCache = new VerboseElementCache<>(packageCacheeSize, "Package cache"); //$NON-NLS-1$
@@ -103,13 +103,17 @@ public JavaModelCache() {
 		this.pkgCache = new ElementCache<>(packageCacheeSize);
 		this.openableCache = new ElementCache<>(openableCacheSize);
 	}
-	this.childrenCache = new HashMap<>(); // HashMap size adjusts automatically
+	this.childrenCache = new HashMap<>(hashMapCapacity(Math.max(256, packageCacheeSize)));
 	resetJarTypeCache();
 }
 
 private int sizeLimit(double d) {
 	return (int) Double.min(Integer.MAX_VALUE/2,d);
 }
+
+	private static int hashMapCapacity(int expectedSize) {
+		return Math.max(16, (int) (expectedSize / 0.75f) + 1);
+	}
 
 private double getOpenableRatio() {
 	return getRatioForProperty(RATIO_PROPERTY);
