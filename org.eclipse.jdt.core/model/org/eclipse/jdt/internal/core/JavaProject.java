@@ -125,6 +125,19 @@ public class JavaProject
 			return resolvedClasspath;
 		}
 	}
+	private static final class PackageFragmentRootContext {
+		private final Map<JavaProject, IClasspathEntry[]> resolvedClasspathByProject = new HashMap<>();
+
+		IClasspathEntry[] getResolvedClasspath(JavaProject project) throws JavaModelException {
+			IClasspathEntry[] resolvedClasspath = this.resolvedClasspathByProject.get(project);
+			if (resolvedClasspath == null) {
+				resolvedClasspath = project.getResolvedClasspath();
+				this.resolvedClasspathByProject.put(project, resolvedClasspath);
+			}
+			return resolvedClasspath;
+		}
+	}
+
 
 	/**
 	 * Marker value used in cases where a release is passed or used as an argument but no specific release is selected.
@@ -567,9 +580,10 @@ public class JavaProject
 	private void computeExpandedClasspath(
 		ClasspathEntry referringEntry,
 		HashMap<String, Boolean> rootIDs,
+		ArrayList<ClasspathEntry> accumulatedEntries,
+		boolean excludeTestCode) throws JavaModelException {
 		computeExpandedClasspath(referringEntry, rootIDs, accumulatedEntries, excludeTestCode, new ExpandedClasspathContext());
 	}
-		ArrayList<ClasspathEntry> accumulatedEntries, boolean excludeTestCode) throws JavaModelException {
 
 	private void computeExpandedClasspath(
 		ClasspathEntry referringEntry,
@@ -723,7 +737,20 @@ public class JavaProject
 		boolean filterModuleRoots,
 		Map rootToResolvedEntries,
 		boolean excludeTestCode) throws JavaModelException {
+		computePackageFragmentRoots(resolvedEntry, accumulatedRoots, rootIDs, referringEntry, retrieveExportedRoots,
+				filterModuleRoots, rootToResolvedEntries, excludeTestCode, new PackageFragmentRootContext());
+	}
 
+	private void computePackageFragmentRoots(
+		IClasspathEntry resolvedEntry,
+		ObjectVector accumulatedRoots,
+		HashSet rootIDs,
+		IClasspathEntry referringEntry,
+		boolean retrieveExportedRoots,
+		boolean filterModuleRoots,
+		Map rootToResolvedEntries,
+		boolean excludeTestCode,
+		PackageFragmentRootContext context) throws JavaModelException {
 		String rootID = ((ClasspathEntry)resolvedEntry).rootID();
 		if (rootIDs.contains(rootID)) return;
 		if(excludeTestCode && resolvedEntry.isTest()) {
@@ -814,14 +841,15 @@ public class JavaProject
 						rootIDs.add(rootID);
 						JavaProject requiredProject = (JavaProject)JavaCore.create(requiredProjectRsc);
 						requiredProject.computePackageFragmentRoots(
-							requiredProject.getResolvedClasspath(),
+							context.getResolvedClasspath(requiredProject),
 							accumulatedRoots,
 							rootIDs,
 							rootToResolvedEntries == null ? resolvedEntry : ((ClasspathEntry)resolvedEntry).combineWith((ClasspathEntry) referringEntry), // only combine if need to build the reverse map
 							retrieveExportedRoots,
 							filterModuleRoots,
 							rootToResolvedEntries,
-							excludeTestCode);
+							excludeTestCode,
+							context);
 					}
 				break;
 			}
@@ -1063,7 +1091,8 @@ public class JavaProject
 			retrieveExportedRoots,
 			filterModuleRoots,
 			rootToResolvedEntries,
-			excludeTestCode);
+			excludeTestCode,
+			new PackageFragmentRootContext());
 		IPackageFragmentRoot[] rootArray = new IPackageFragmentRoot[accumulatedRoots.size()];
 		accumulatedRoots.copyInto(rootArray);
 		return rootArray;
@@ -1081,6 +1110,7 @@ public class JavaProject
 		computePackageFragmentRoots(resolvedClasspath, accumulatedRoots, rootIDs, referringEntry, retrieveExportedRoots,
 				filterModuleRoots, rootToResolvedEntries, false);
 	}
+
 	/**
 	 * Returns (local/all) the package fragment roots identified by the given project's classpath.
 	 * Note: this follows project classpath references to find required project contributions,
@@ -1104,6 +1134,20 @@ public class JavaProject
 		boolean filterModuleRoots,
 		Map rootToResolvedEntries,
 		boolean excludeTestCode) throws JavaModelException {
+		computePackageFragmentRoots(resolvedClasspath, accumulatedRoots, rootIDs, referringEntry, retrieveExportedRoots,
+				filterModuleRoots, rootToResolvedEntries, excludeTestCode, new PackageFragmentRootContext());
+	}
+
+	private void computePackageFragmentRoots(
+		IClasspathEntry[] resolvedClasspath,
+		ObjectVector accumulatedRoots,
+		HashSet rootIDs,
+		IClasspathEntry referringEntry,
+		boolean retrieveExportedRoots,
+		boolean filterModuleRoots,
+		Map rootToResolvedEntries,
+		boolean excludeTestCode,
+		PackageFragmentRootContext context) throws JavaModelException {
 
 		if (referringEntry == null){
 			rootIDs.add(rootID());
@@ -1117,7 +1161,8 @@ public class JavaProject
 				retrieveExportedRoots,
 				filterModuleRoots,
 				rootToResolvedEntries,
-				excludeTestCode);
+				excludeTestCode,
+				context);
 		}
 	}
 	/**
