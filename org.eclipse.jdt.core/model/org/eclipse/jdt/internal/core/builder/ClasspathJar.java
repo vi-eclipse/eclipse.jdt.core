@@ -26,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashSet;
@@ -89,7 +90,7 @@ private Set<String> getCachedPackageNames() {
 			// cacheEntry.zipFile.get() != this.zipFile => update zipFile
 			return new PackageCacheEntry(new WeakReference<>(this.zipFile), cacheEntry.lastModified , cacheEntry.fileSize, cacheEntry.packageSet);
 		}
-		return new PackageCacheEntry(new WeakReference<>(this.zipFile), timestamp, this.fileSize, Set.copyOf(readPackageNames()));
+		return new PackageCacheEntry(new WeakReference<>(this.zipFile), timestamp, this.fileSize, Collections.unmodifiableSet(readPackageNames()));
 	});
 
 	return entry.packageSet;
@@ -308,7 +309,7 @@ private boolean readKnownPackageNames() {
 		this.knownPackageNames = getCachedPackageNames();
 		return true;
 	} catch(Exception e) {
-		this.knownPackageNames = Set.of(); // assume for this build the zipFile is empty
+		this.knownPackageNames = Collections.emptySet(); // assume for this build the zipFile is empty
 		return false;
 	}
 }
