@@ -7413,6 +7413,25 @@ public void testClasspathTestSourceValidation5() throws CoreException {
 	}
 }
 
+public void testClasspathEntryCachesTestAttributes() throws Exception {
+	IClasspathEntry entry = JavaCore.newSourceEntry(
+			new Path("/P/src-tests"),
+			null,
+			null,
+			new Path("/P/bin-tests"),
+			new IClasspathAttribute[] {
+					JavaCore.newClasspathAttribute(IClasspathAttribute.TEST, "true"),
+					JavaCore.newClasspathAttribute(IClasspathAttribute.WITHOUT_TEST_CODE, "true")
+			});
+
+	assertTrue("Entry should be marked as test", entry.isTest());
+	assertTrue("Entry should exclude test code", entry.isWithoutTestCode());
+
+	ClasspathEntry changed = ((ClasspathEntry) entry).withExtraAttributeRemoved(IClasspathAttribute.WITHOUT_TEST_CODE);
+	assertTrue("Removing WITHOUT_TEST_CODE must not affect TEST", changed.isTest());
+	assertFalse("WITHOUT_TEST_CODE should be removed", changed.isWithoutTestCode());
+}
+
 public void testBug539998() throws CoreException {
 	try {
 		IJavaProject proj1TestOnly = this.createJavaProject("P1", new String[] {}, "bin-tests");

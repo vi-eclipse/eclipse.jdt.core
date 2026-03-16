@@ -168,6 +168,8 @@ public class ClasspathEntry implements IClasspathEntry {
 
 	private String rootID;
 	private AccessRuleSet accessRuleSet;
+	private final boolean test;
+	private final boolean withoutTestCode;
 
 
 	static class UnknownXmlElements {
@@ -324,6 +326,8 @@ public class ClasspathEntry implements IClasspathEntry {
 
 		this.combineAccessRules = combineAccessRules;
 		this.extraAttributes = extraAttributes.length > 0 ? extraAttributes : NO_EXTRA_ATTRIBUTES;
+		this.test = hasAttribute(IClasspathAttribute.TEST);
+		this.withoutTestCode = hasAttribute(IClasspathAttribute.WITHOUT_TEST_CODE);
 
 	    if (inclusionPatterns != INCLUDE_ALL && inclusionPatterns.length > 0) {
 			this.fullInclusionPatternChars = UNINIT_PATTERNS;
@@ -335,6 +339,25 @@ public class ClasspathEntry implements IClasspathEntry {
 		this.sourceAttachmentRootPath = sourceAttachmentRootPath;
 		this.specificOutputLocation = specificOutputLocation;
 		this.isExported = isExported;
+	}
+
+	private boolean hasAttribute(String attributeName) {
+		for (IClasspathAttribute attribute : this.extraAttributes) {
+			if (attributeName.equals(attribute.getName()) && "true".equals(attribute.getValue())) { //$NON-NLS-1$
+				return true;
+			}
+		}
+		return false;
+	}
+
+	@Override
+	public boolean isTest() {
+		return this.test;
+	}
+
+	@Override
+	public boolean isWithoutTestCode() {
+		return this.withoutTestCode;
 	}
 
 	@Override
